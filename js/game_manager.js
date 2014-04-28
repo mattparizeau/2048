@@ -3,6 +3,8 @@ function GameManager(size, InputManager, Actuator, StorageManager) {
   this.inputManager   = new InputManager;
   this.storageManager = new StorageManager;
   this.actuator       = new Actuator;
+  this.autoplay       = false;
+  this.canPop         = true;
 
   this.startTiles     = 2;
 
@@ -40,12 +42,14 @@ GameManager.prototype.setup = function () {
     this.grid        = new Grid(previousState.grid.size,
                                 previousState.grid.cells); // Reload grid
     this.score       = previousState.score;
+    this.level       = previousState.level;
     this.over        = previousState.over;
     this.won         = previousState.won;
     this.keepPlaying = previousState.keepPlaying;
   } else {
     this.grid        = new Grid(this.size);
     this.score       = 0;
+    this.level       = 1;
     this.over        = false;
     this.won         = false;
     this.keepPlaying = false;
@@ -90,6 +94,7 @@ GameManager.prototype.actuate = function () {
 
   this.actuator.actuate(this.grid, {
     score:      this.score,
+    level:      this.level,
     over:       this.over,
     won:        this.won,
     bestScore:  this.storageManager.getBestScore(),
@@ -103,6 +108,7 @@ GameManager.prototype.serialize = function () {
   return {
     grid:        this.grid.serialize(),
     score:       this.score,
+    level:       this.level,
     over:        this.over,
     won:         this.won,
     keepPlaying: this.keepPlaying
@@ -138,6 +144,7 @@ GameManager.prototype.move = function (direction) {
   var vector     = this.getVector(direction);
   var traversals = this.buildTraversals(vector);
   var moved      = false;
+  var levelUp    = false;
 
   // Save the current tile positions and remove merger information
   this.prepareTiles();
@@ -165,9 +172,24 @@ GameManager.prototype.move = function (direction) {
 
           // Update the score
           self.score += merged.value;
+          
+          if (merged.value >= 32)
+          {
+            var snd = new Audio("combine.wav");
+            snd.play();
+          }
 
           // The mighty 2048 tile
-          if (merged.value === 2048) self.won = true;
+          if (merged.value === 1024)
+          {
+                levelUp = true;
+                //self.actuate();
+                
+                //self.grid = new Grid(self.size); // Reload grid
+                //self.addStartTiles();
+                //self.actuate();
+                //self.won = true;
+          }
         } else {
           self.moveTile(tile, positions.farthest);
         }
@@ -180,15 +202,60 @@ GameManager.prototype.move = function (direction) {
   });
 
   if (moved) {
+    var snd = new Audio("move.wav");
+    snd.play();
+  
     this.addRandomTile();
 
-    if (!this.movesAvailable()) {
-      this.over = true; // Game over!
+    if (!this.movesAvailable())
+    {
+        if (this.canPop)
+        {
+            while (!this.movesAvailable()) {
+              this.popCorner();
+            }
+            var snd = new Audio("pop.wav");
+            snd.play();
+        } else {
+            this.over = true; // Game over!
+        }
     }
 
     this.actuate();
+    if (this.autoplay)
+        setTimeout(doMove(this), 100);
+  } else if (this.autoplay) {
+    var rndVal = Math.floor(Math.random() * 4);
+    this.move(rndVal);
   }
+  
+  if (levelUp)
+  {
+        this.level++;
+        this.grid = new Grid(self.size); // Reload grid
+        this.addStartTiles();
+        this.actuate();
+  }
+  
+  //var rndVal = Math.floor(Math.random() * 3);
+  
+  //setTimeout(function(){doMove(this)}, 2000);
 };
+
+function doMove(obj)
+{
+    return function()
+    {
+        var rndVal = Math.floor(Math.random() * 4);
+        obj.move(rndVal);
+    };
+}
+
+/*function doMove (obj)
+{
+    var rndVal = Math.floor(Math.random() * 3);
+    obj.move(rndVal);
+}*/
 
 // Get the vector representing the chosen direction
 GameManager.prototype.getVector = function (direction) {
@@ -238,6 +305,45 @@ GameManager.prototype.findFarthestPosition = function (cell, vector) {
 GameManager.prototype.movesAvailable = function () {
   return this.grid.cellsAvailable() || this.tileMatchesAvailable();
 };
+
+GameManager.prototype.popCorner = function () {
+  var value = Math.random();
+  
+  if (value < 0.2)
+  {
+    this.popTile(3, 3);
+    this.popTile(2, 3);
+    this.popTile(3, 2);
+    this.popTile(2, 2);
+  } else if (value < 0.5)
+  {
+    this.popTile(0, 0);
+    this.popTile(0, 1);
+    this.popTile(1, 1);
+    this.popTile(1, 0);
+  } else if (value < 0.9)
+  {
+    this.popTile(0, 3);
+    this.popTile(1, 3);
+    this.popTile(0, 2);
+    this.popTile(2, 2);
+  } else {
+    this.popTile(3, 0);
+    this.popTile(3, 1);
+    this.popTile(2, 0);
+    this.popTile(2, 2);
+  }
+};
+
+GameManager.prototype.popTile = function (x, y) {
+  cell = { x: x, y: y };
+  tile = this.grid.cellContent(cell);
+  if (tile)
+  {
+    if (tile.value < 32)
+        this.grid.removeTile(tile);
+  }
+}
 
 // Check for available matches between tiles (more expensive check)
 GameManager.prototype.tileMatchesAvailable = function () {

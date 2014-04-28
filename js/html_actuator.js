@@ -1,6 +1,7 @@
 function HTMLActuator() {
   this.tileContainer    = document.querySelector(".tile-container");
   this.scoreContainer   = document.querySelector(".score-container");
+  this.levelContainer   = document.querySelector(".level-container");
   this.bestContainer    = document.querySelector(".best-container");
   this.messageContainer = document.querySelector(".game-message");
 
@@ -23,6 +24,7 @@ HTMLActuator.prototype.actuate = function (grid, metadata) {
 
     self.updateScore(metadata.score);
     self.updateBestScore(metadata.bestScore);
+    self.updateLevel(metadata.level);
 
     if (metadata.terminated) {
       if (metadata.over) {
@@ -57,7 +59,7 @@ HTMLActuator.prototype.addTile = function (tile) {
   // We can't use classlist because it somehow glitches when replacing classes
   var classes = ["tile", "tile-" + tile.value, positionClass];
 
-  if (tile.value > 2048) classes.push("tile-super");
+  if (tile.value > 1024) classes.push("tile-super");
 
   this.applyClasses(wrapper, classes);
 
@@ -120,9 +122,45 @@ HTMLActuator.prototype.updateScore = function (score) {
   }
 };
 
+HTMLActuator.prototype.updateLevel = function (level) {
+  this.clearContainer(this.levelContainer);
+
+  var difference = level - this.level;
+  this.level = level;
+  
+  this.levelContainer.textContent = this.level;
+
+  if (difference > 0) {
+    var addition = document.createElement("div");
+    addition.classList.add("score-addition");
+    addition.textContent = "+" + difference;
+
+    this.levelContainer.appendChild(addition);
+    
+    this.messageLvl(this.level);
+   }
+};
+
 HTMLActuator.prototype.updateBestScore = function (bestScore) {
   this.bestContainer.textContent = bestScore;
 };
+
+HTMLActuator.prototype.messageLvl = function (level) {
+  var type    = "game-level";
+  var message = "Level " + level;
+
+  this.messageContainer.classList.add(type);
+  this.messageContainer.getElementsByTagName("p")[0].textContent = message;
+  setTimeout(waitClear(this), 2000);
+};
+
+function waitClear(obj)
+{
+    return function()
+    {
+        obj.clearMessage();
+    };
+}
 
 HTMLActuator.prototype.message = function (won) {
   var type    = won ? "game-won" : "game-over";
@@ -136,4 +174,5 @@ HTMLActuator.prototype.clearMessage = function () {
   // IE only takes one value to remove at a time.
   this.messageContainer.classList.remove("game-won");
   this.messageContainer.classList.remove("game-over");
+  this.messageContainer.classList.remove("game-level");
 };
